@@ -1,0 +1,49 @@
+---
+title: "Метод Метрополиса-Хастингса"
+output: html_notebook
+---
+
+```{r}
+MetropolisGastings <- function(n, pi_0, P, prob_g, gen_g){
+  samp <- pi_0(1)
+  x_t <- samp
+  alpha <- runif(n - 1)
+  
+  for (i in 1:(n - 1)){
+    x <- gen_g(1, x_t)
+    A <- min(1, P(x) * prob_g(x_t, x) / (P(x_t) * prob_g(x, x_t)))
+    
+    if (alpha[i] > A){
+      samp <- c(samp, x_t)
+    }else{
+      samp <- c(samp, x)
+      x_t <- x
+    }
+  }
+  
+  samp
+}
+```
+
+```{r}
+n <- 10000
+burn <- 0.1
+thinning <- 3
+```
+
+
+```{r}
+samp <- MetropolisGastings(n = n, pi_0 = rexp, P = function(x) dbeta(x, 6.3, 0.7), prob_g = function(x, y) dunif(x), gen_g = function(n, x) runif(n))
+```
+
+```{r}
+samp <- samp[seq(1, n, thinning)]
+samp <- samp[floor(burn * length(samp)):length(samp)]
+```
+
+
+```{r}
+hist.default(samp, probability = TRUE)
+lines(x = seq(0, 1, 0.01), y = dbeta(seq(0, 1, 0.01), 6.3, 0.7))
+```
+
