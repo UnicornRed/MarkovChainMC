@@ -1,7 +1,9 @@
 ---
-title: "Метод Метрополиса-Хастингса"
+title: "Метод Метрополиса-Гастингса"
 output: html_notebook
 ---
+
+# Моделирование методом Метрополиса-Гастингса
 
 ```{r}
 MetropolisGastings <- function(n, pi_0, P, prob_g, gen_g){
@@ -13,7 +15,7 @@ MetropolisGastings <- function(n, pi_0, P, prob_g, gen_g){
     x <- gen_g(1, x_t)
     A <- min(1, P(x) * prob_g(x_t, x) / (P(x_t) * prob_g(x, x_t)))
     
-    if (alpha[i] > A){
+    if (is.nan(A) | alpha[i] > A){
       samp <- c(samp, x_t)
     }else{
       samp <- c(samp, x)
@@ -25,25 +27,172 @@ MetropolisGastings <- function(n, pi_0, P, prob_g, gen_g){
 }
 ```
 
+Задаём параметры:
+
 ```{r}
+set.seed(123)
+alpha <- 0.7
+beta <- 0.3
+alpha_0 <- 1
+beta_0 <- 1
 n <- 10000
-burn <- 0.1
-thinning <- 3
+burn <- 0.2
+thinning <- 5
 ```
 
+Вероятность распределения, которое хотим моделировать:
 
 ```{r}
-samp <- MetropolisGastings(n = n, pi_0 = rexp, P = function(x) dbeta(x, 6.3, 0.7), prob_g = function(x, y) dunif(x), gen_g = function(n, x) runif(n))
+prob_modeling_func <- function(x, ...){
+  arg = list(...)
+  dbeta(x, arg[[1]], arg[[2]])
+}
+```
+
+Моделируем бета распределение с параметрами $\alpha = 0.7, \beta = 0.3$, используя бета распределение с параметрами $\alpha _0 = 1, \beta _0 = 1$ (равномерное):
+
+```{r}
+samp <- MetropolisGastings(n = n, pi_0 = runif, P = function(x) prob_modeling_func(x, alpha, beta), prob_g = function(x, y) dbeta(x, alpha_0, beta_0), gen_g = function(n, x) rbeta(n, alpha_0, beta_0))
+```
+
+Посмотрим на полученную выборку и сравним с плотностью исходного распределения:
+
+```{r}
+hist.default(samp, probability = TRUE, breaks = seq(0, 1, 0.05))
+lines(x = seq(0, 1, 0.01), y = prob_modeling_func(seq(0, 1, 0.01), alpha, beta))
+lines(x = seq(0, 1, 0.01), y = dbeta(seq(0, 1, 0.01), alpha_0, beta_0), col = "blue")
+```
+
+Получили достаточно похожее распределение.
+
+Автокорреляция полученного ряда:
+
+```{r}
+acf(samp, lag.max = length(samp))
+```
+
+Тест на стационарность:
+
+```{r}
+adf.test(samp)
+```
+
+По тесту и визуальному оцениванию приходим к выводу, что процесс вышел на стационарность.
+
+## Burn-in и прореживание
+
+Проведём процедуру Burn-in и прореживание:
+
+```{r}
+samp.burn <- samp[seq(1, n, thinning)]
+samp.burn <- samp.burn[floor(burn * length(samp.burn)):length(samp.burn)]
+```
+
+Получаем меньшую выборку и особых различий (на графиках) не наблюдается:
+
+```{r}
+hist.default(samp.burn, probability = TRUE, breaks = seq(0, 1, 0.05))
+lines(x = seq(0, 1, 0.01), y = prob_modeling_func(seq(0, 1, 0.01), alpha, beta))
+lines(x = seq(0, 1, 0.01), y = dbeta(seq(0, 1, 0.01), alpha_0, beta_0), col = "blue")
+```
+
+Автокорреляция тоже примерно та же:
+
+```{r}
+acf(samp.burn, lag.max = length(samp.burn))
+```
+
+Автокорреляция стала меньше.
+
+Тест на стационарность:
+
+```{r}
+adf.test(samp.burn)
+```
+
+По тесту и визуальному оцениванию приходим к выводу, что процесс вышел на стационарность.
+
+## Траектория
+
+Посмотрим на траекторию:
+
+```{r}
+plot(1:length(samp), y = samp, type = "l")
+```
+
+## Другие начальные варианты
+
+```{r}
+alpha_1 <- 2
+beta_1 <- 2
+samp.1 <- MetropolisGastings(n = n, pi_0 = runif, P = function(x) prob_modeling_func(x, alpha, beta), prob_g = function(x, y) dbeta(x, alpha_1, beta_1), gen_g = function(n, x) rbeta(n, alpha_1, beta_1))
+hist.default(samp.1, probability = TRUE, breaks = seq(0, 1, 0.05))
+lines(x = seq(0, 1, 0.01), y = prob_modeling_func(seq(0, 1, 0.01), alpha, beta))
+lines(x = seq(0, 1, 0.01), y = dbeta(seq(0, 1, 0.01), alpha_1, beta_1), col = "blue")
 ```
 
 ```{r}
-samp <- samp[seq(1, n, thinning)]
-samp <- samp[floor(burn * length(samp)):length(samp)]
+alpha_2 <- 5
+beta_2 <- 1
+samp.2 <- MetropolisGastings(n = n, pi_0 = runif, P = function(x) prob_modeling_func(x, alpha, beta), prob_g = function(x, y) dbeta(x, alpha_2, beta_2), gen_g = function(n, x) rbeta(n, alpha_2, beta_2))
+hist.default(samp.2, probability = TRUE, breaks = seq(0, 1, 0.05))
+lines(x = seq(0, 1, 0.01), y = prob_modeling_func(seq(0, 1, 0.01), alpha, beta))
+lines(x = seq(0, 1, 0.01), y = dbeta(seq(0, 1, 0.01), alpha_2, beta_2), col = "blue")
 ```
-
 
 ```{r}
-hist.default(samp, probability = TRUE)
-lines(x = seq(0, 1, 0.01), y = dbeta(seq(0, 1, 0.01), 6.3, 0.7))
+alpha_3 <- 1
+beta_3 <- 5
+samp.3 <- MetropolisGastings(n = n, pi_0 = runif, P = function(x) prob_modeling_func(x, alpha, beta), prob_g = function(x, y) dbeta(x, alpha_3, beta_3), gen_g = function(n, x) rbeta(n, alpha_3, beta_3))
+hist.default(samp.3, probability = TRUE, breaks = seq(0, 1, 0.05))
+lines(x = seq(0, 1, 0.01), y = prob_modeling_func(seq(0, 1, 0.01), alpha, beta))
+lines(x = seq(0, 1, 0.01), y = dbeta(seq(0, 1, 0.01), alpha_3, beta_3), col = "blue")
 ```
 
+```{r}
+alpha_4 <- 5
+beta_4 <- 2
+samp.4 <- MetropolisGastings(n = n, pi_0 = runif, P = function(x) prob_modeling_func(x, alpha, beta), prob_g = function(x, y) dbeta(x, alpha_4, beta_4), gen_g = function(n, x) rbeta(n, alpha_4, beta_4))
+hist.default(samp.4, probability = TRUE, breaks = seq(0, 1, 0.05))
+lines(x = seq(0, 1, 0.01), y = prob_modeling_func(seq(0, 1, 0.01), alpha, beta))
+lines(x = seq(0, 1, 0.01), y = dbeta(seq(0, 1, 0.01), alpha_4, beta_4), col = "blue")
+```
+
+Похуже, чем равномерное.
+
+## Подсчёт вероятностей перехода в новое состояние
+
+```{r}
+AcceptanceRate <- function(x){
+  res <- 0
+  
+  for (i in 2:length(x)){
+    if (x[i] != x[i - 1]){
+      res <- res + 1
+    }
+  }
+  
+  res / length(x)
+}
+```
+
+```{r}
+AcceptanceRate(samp)
+```
+
+```{r}
+prob_new <- sapply(seq(1, 10, 0.2), function(param){
+    samp <- MetropolisGastings(n = n, pi_0 = runif, P = function(x) prob_modeling_func(x, alpha, beta), prob_g = function(x, y) dbeta(x, param, param), gen_g = function(n, x) rbeta(n, param, param))
+    # samp <- samp[seq(1, n, thinning)]
+    # samp <- samp[floor(burn * length(samp)):length(samp)]
+    AcceptanceRate(samp)
+  })
+```
+
+График зависимости вероятности перехода в новое состояние от дисперсии:
+
+```{r}
+plot(x = sapply(seq(1, 10, 0.2), function(param) 1 / (8 * param + 4)), prob_new)
+```
+
+Видна тенденция к увеличению верояности принятия нового значения при увеличении дисперсии. Это не удивительно, ведь чем больше дисперсия, тем дальше распределение цепи от искомого распределения.
